@@ -104,7 +104,6 @@ local function cycleYaw(data)
     data.yawCycleIndex = data.yawCycleIndex + .5
 
     ::continue::
-    local angle = data.yawCycleIndex
     announceResolve(client.GetPlayerInfo(data.plr:GetIndex()).Name, getYawText(data))
 end
 
