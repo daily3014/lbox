@@ -289,7 +289,6 @@ callbacks.Register("CreateMove", function(cmd)
         local victimInfo = getBestTarget()
     
         if victimInfo then
-            client.ChatPrintf("shot and found")
             local victim = victimInfo.entity
 
             awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + clientstate.GetLatencyIn() + clientstate.GetLatencyOut(), wasHit = false}
@@ -355,8 +354,6 @@ callbacks.Register("FireGameEvent", function(event)
         end
 
         local steamID = getSteamID(victim)
-
-        warn(tostring(headshot))
 
         if awaitingConfirmation[steamID] then
             awaitingConfirmation[steamID].wasHit = headshot
