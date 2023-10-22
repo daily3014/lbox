@@ -19,6 +19,7 @@ local customAngleData = {}
 local awaitingConfirmation = {}
 local misses = {}
 local headshotWeapons = {[17] = true, [43] = true}
+local cycleKeyState = false
 
 local M_RADPI = 180 / math.pi
 
@@ -106,15 +107,13 @@ local function announceResolve(data)
     client.ChatPrintf(msg)
 end
 
-local function cycleYaw(data)
-    if data.yawCycleIndex >= #config.yawCycle then
+local function cycleYaw(data, step)
+    data.yawCycleIndex = data.yawCycleIndex + (step or .5)
+
+    if data.yawCycleIndex > #config.yawCycle then
         data.yawCycleIndex = 1
-        goto continue
     end
 
-    data.yawCycleIndex = data.yawCycleIndex + .5
-
-    ::continue::
     announceResolve(data)
 end
 
@@ -194,7 +193,7 @@ local function getEyeAngles(player)
     return EulerAngles(angles.x, angles.y, angles.z)
 end
 
-local function getBestTarget()
+local function getBestTarget(customFOV)
     local localPlayer = entities.GetLocalPlayer()
     local players = entities.FindByClass("CTFPlayer")
     local target = nil
@@ -209,7 +208,7 @@ local function getBestTarget()
         local aimPos = getHitboxPos(player, 1)
         local angles = positionAngles(getEyePos(localPlayer), aimPos)
         local fov = angleFov(angles, engine.GetViewAngles())
-        if fov > gui.GetValue("aim fov") then goto continue end
+        if fov > (customFOV or gui.GetValue("aim fov")) then goto continue end
 
         --local trace = engine.TraceLine(getEyePos(localPlayer), aimPos, MASK_SHOT | CONTENTS_GRATE)
         --if trace.entity ~= player or trace.fraction < 0.99 then goto continue end
@@ -312,6 +311,27 @@ callbacks.Register("CreateMove", function(cmd)
     end
 
     ::skip::
+
+    if gui.GetValue("toggle yaw key") ~= 0 then
+        local keyDown = input.IsButtonDown(gui.GetValue("toggle yaw key"))
+
+        if cycleKeyState ~= keyDown and keyDown == true then
+            local victimInfo = getBestTarget(20)
+        
+            if victimInfo then
+                local victim = victimInfo.entity
+            
+                if not customAngleData[getSteamID(victim)] then
+                    setupPlayerAngleData(victim)
+                    
+                end
+                engine.PlaySound("ui/panel_close.wav")
+                cycleYaw(customAngleData[getSteamID(victim)], 1)
+            end
+        end
+    
+        cycleKeyState = keyDown
+    end
 
     for steamID, data in pairs(awaitingConfirmation) do
         local enemy, hitTime, wasHit = data.enemy, data.hitTime, data.wasHit
