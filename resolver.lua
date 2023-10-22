@@ -286,17 +286,19 @@ callbacks.Register("CreateMove", function(cmd)
     local playerDidShoot = playerShot(cmd)
     local localPlayer = entities.GetLocalPlayer()
 
-    if playerDidShoot then
-        local victimInfo = getBestTarget()
-    
-        if victimInfo then
-            local victim = victimInfo.entity
+    if not gamerules.IsTruceActive() then
+        if playerDidShoot then
+            local victimInfo = getBestTarget()
+        
+            if victimInfo then
+                local victim = victimInfo.entity
 
-            if awaitingConfirmation[getSteamID(victim)].wasHit then
-                goto skip
+                if awaitingConfirmation[getSteamID(victim)].wasHit then
+                    goto skip
+                end
+
+                awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + clientstate.GetLatencyIn() + clientstate.GetLatencyOut(), wasHit = false}
             end
-
-            awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + clientstate.GetLatencyIn() + clientstate.GetLatencyOut(), wasHit = false}
         end
     end
 
@@ -338,7 +340,7 @@ callbacks.Register("CreateMove", function(cmd)
 end)
 
 callbacks.Register("FireGameEvent", function(event)
-    if event:GetName() == 'player_hurt' then
+    if event:GetName() == "player_hurt" then
         local localPlayer = entities.GetLocalPlayer()
         local victim = entities.GetByUserID(event:GetInt("userid"))
         local attacker = entities.GetByUserID(event:GetInt("attacker"))
