@@ -59,11 +59,6 @@ local function resolvePitch(pitch)
     return pitch / 271 * 89
 end
 
-local function announceResolve(name, yaw)
-    local msg = string.format("\x06[\x07FF1122Lmaobox\x06] \x04Adjusted player '%s' yaw to %s", name, yaw)
-    client.ChatPrintf(msg)
-end
-
 local function isUsingAntiAim(pitch)
     if pitch > 89.4 or pitch < -89.4 then
         return true
@@ -96,6 +91,12 @@ local function getYawText(data)
     return newYaw .. "°"
 end
 
+local function announceResolve(data)
+    local name, yaw = client.GetPlayerInfo(data.plr:GetIndex()).Name, getYawText(data)
+    local msg = string.format("\x06[\x07FF1122Lmaobox\x06] \x04Adjusted player '%s' yaw to %s", name, yaw)
+    client.ChatPrintf(msg)
+end
+
 local function cycleYaw(data)
     if data.yawCycleIndex >= #config.yawCycle then
         data.yawCycleIndex = 1
@@ -105,7 +106,7 @@ local function cycleYaw(data)
     data.yawCycleIndex = data.yawCycleIndex + .5
 
     ::continue::
-    announceResolve(client.GetPlayerInfo(data.plr:GetIndex()).Name, getYawText(data))
+    announceResolve(data)
 end
 
 local function tryingToShoot(cmd)
@@ -201,7 +202,7 @@ local function getBestTarget()
         local fov = angleFov(angles, engine.GetViewAngles())
         if fov > gui.GetValue("aim fov") then goto continue end
 
-        --local trace = engine.TraceLine(getEyePos(localPlayer),    , MASK_SHOT | CONTENTS_GRATE)
+        --local trace = engine.TraceLine(getEyePos(localPlayer), aimPos, MASK_SHOT | CONTENTS_GRATE)
         --if trace.entity ~= player or trace.fraction < 0.99 then goto continue end
 
         if fov < lastFov then
@@ -254,7 +255,7 @@ local function propUpdate()
         if idx == localPlayer:GetIndex() then goto continue end
         if player:IsDormant() or not player:IsAlive() then goto continue end
         
-        if playerlist.GetPriority(player) > config.minPriority then
+        if playerlist.GetPriority(player) >= config.minPriority then
             setupPlayerAngleData(player)
         end
 
@@ -291,41 +292,45 @@ callbacks.Register("CreateMove", function(cmd)
         if victimInfo then
             local victim = victimInfo.entity
 
+            if awaitingConfirmation[getSteamID(victim)].wasHit then
+                goto skip
+            end
+
             awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + clientstate.GetLatencyIn() + clientstate.GetLatencyOut(), wasHit = false}
         end
     end
+
+    ::skip::
 
     for steamID, data in pairs(awaitingConfirmation) do
         local enemy, hitTime, wasHit = data.enemy, data.hitTime, data.wasHit
 
         if wasHit then
-            awaitingConfirmation[steamID] = nil
             goto continue
         end
 
         if globals.CurTime() >= hitTime then
-            if not wasHit then
-                local usingAntiAim = usesAntiAim[steamID]
+            local usingAntiAim = usesAntiAim[steamID]
 
-                if not usingAntiAim then
-                    if not misses[steamID] then
-                        misses[steamID] = 0
-                    end
-
-                    if misses[steamID] < config.maxMisses then
-                        goto continue
-                    end
+            if not usingAntiAim then
+                if not misses[steamID] then
+                    misses[steamID] = 0
                 end
 
-                if not customAngleData[steamID] then
-                    setupPlayerAngleData(enemy)
+                if misses[steamID] < config.maxMisses then
+                    misses[steamID] = misses[steamID] + 1
+                    goto continue
                 end
-
-                cycleYaw(customAngleData[steamID])
             end
 
-            awaitingConfirmation[steamID] = nil
+            if not customAngleData[steamID] then
+                setupPlayerAngleData(enemy)
+            end
+
+            cycleYaw(customAngleData[steamID])
+
             goto continue
+            awaitingConfirmation[steamID] = nil
         end
 
         ::continue::
