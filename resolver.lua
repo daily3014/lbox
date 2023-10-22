@@ -44,6 +44,7 @@ local function setupPlayerAngleData(player)
     customAngleData[steamID] = {
         plr = player,
         yawCycleIndex = 0,
+        lastYaw = 0,
     }
 end
 
@@ -84,6 +85,10 @@ end
 local function getYawText(data)
     local newYaw = config.yawCycle[math.floor(data.yawCycleIndex)]
 
+    if not newYaw then
+        return ""
+    end
+
     if newYaw == "Invert" then
         return "Inverted"
     end
@@ -93,7 +98,11 @@ end
 
 local function announceResolve(data)
     local name, yaw = client.GetPlayerInfo(data.plr:GetIndex()).Name, getYawText(data)
-    local msg = string.format("\x06[\x07FF1122Lmaobox\x06] \x04Adjusted player '%s' yaw to %s", name, yaw)
+    if yaw == "" then return end
+    if data.lastYaw == yaw then return end
+    data.lastYaw = yaw
+
+    local msg = string.format("\x073475c9[Resolver] \x01Adjusted player \x073475c9'%s'\x01 yaw to \x07f22929%s", name, yaw)
     client.ChatPrintf(msg)
 end
 
@@ -340,7 +349,7 @@ callbacks.Register("CreateMove", function(cmd)
 end)
 
 callbacks.Register("FireGameEvent", function(event)
-    if event:GetName() == "player_hurt" then
+    if event:GetName() == 'player_hurt' then
         local localPlayer = entities.GetLocalPlayer()
         local victim = entities.GetByUserID(event:GetInt("userid"))
         local attacker = entities.GetByUserID(event:GetInt("attacker"))
