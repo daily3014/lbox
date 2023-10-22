@@ -224,7 +224,7 @@ local function playerShot(cmd, player, maxDifference)
     if not tryingToShoot(cmd) then return false end
 
     local id = weapon:GetWeaponID()
-    if onlyHeadshots and not headshotWeapons[id] then return end
+    if config.onlyHeadshots and not headshotWeapons[id] then return end
 
     local shots = weapon:GetPropInt("m_iConsecutiveShots")
 
