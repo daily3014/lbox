@@ -9,7 +9,8 @@ local config = {
         90, -90,
         125, -125,
         180,
-        "Invert"
+        "Inverted",
+        "Look At",
     }
 }
 
@@ -69,15 +70,30 @@ local function isUsingAntiAim(pitch)
     return false
 end
 
-local function getYaw(currentYaw, data)
-    local newYaw = config.yawCycle[math.floor(data.yawCycleIndex)]
+local function lookAt(from, to)
+    local delta = vector.Subtract(to, from)
+    local yaw = math.atan(delta.y / delta.x) * 180 / math.pi
 
-    if not newYaw then
-        return currentYaw
+    if delta.x < 0 then
+        yaw = yaw + 180
     end
 
-    if newYaw == "Invert" then
+    if isNaN(yaw) then yaw = 0 end
+
+    return yaw
+end
+
+local function getYaw(currentYaw, data)
+    local newYaw = config.yawCycle[math.floor(data.yawCycleIndex)]
+    if not newYaw then return currentYaw end
+
+    if newYaw == "Inverted" then
         return -currentYaw
+    elseif newYaw == "Look At" then
+        local enemyPosition = data.plr:GetAbsOrigin()
+        local localPlayerPosition = entities.GetLocalPlayer():GetAbsOrigin()
+        
+        return lookAt(enemyPosition, localPlayerPosition)
     end
 
     return newYaw
@@ -85,13 +101,10 @@ end
 
 local function getYawText(data)
     local newYaw = config.yawCycle[math.floor(data.yawCycleIndex)]
+    if not newYaw then return "" end
 
-    if not newYaw then
-        return ""
-    end
-
-    if newYaw == "Invert" then
-        return "Inverted"
+    if type(newYaw) == "string" then
+        return newYaw
     end
 
     return newYaw .. "°"
@@ -99,8 +112,8 @@ end
 
 local function announceResolve(data)
     local name, yaw = client.GetPlayerInfo(data.plr:GetIndex()).Name, getYawText(data)
-    if yaw == "" then return end
-    if data.lastYaw == yaw then return end
+    if yaw == "" or data.lastYaw == yaw then return end
+    
     data.lastYaw = yaw
 
     local msg = string.format("\x073475c9[Resolver] \x01Adjusted player \x073475c9'%s'\x01 yaw to \x07f22929%s", name, yaw)
@@ -316,7 +329,7 @@ callbacks.Register("CreateMove", function(cmd)
         local keyDown = input.IsButtonDown(gui.GetValue("toggle yaw key"))
 
         if cycleKeyState ~= keyDown and keyDown == true then
-            local victimInfo = getBestTarget(20)
+            local victimInfo = getBestTarget(13)
         
             if victimInfo then
                 local victim = victimInfo.entity
