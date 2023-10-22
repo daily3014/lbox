@@ -1,6 +1,7 @@
 local config = {
     onlyHeadshots = true,
     maxMisses = 3,
+    minPriority = 3,
 
     yawCycle = {
         0,
@@ -253,7 +254,7 @@ local function propUpdate()
         if idx == localPlayer:GetIndex() then goto continue end
         if player:IsDormant() or not player:IsAlive() then goto continue end
         
-        if playerlist.GetPriority(player) then
+        if playerlist.GetPriority(player) > config.minPriority then
             setupPlayerAngleData(player)
         end
 
