@@ -127,6 +127,12 @@ local function announceResolve(data)
     client.ChatPrintf(msg)
 end
 
+local function announceMiss(player)
+	local name, steamID = client.GetPlayerInfo(player:GetIndex()).Name, getSteamID(player)
+	local msg = string.format("\x073475c9[Resolver] \x01Missed player \x073475c9'%s'\x01. Shots remaining: \x07f22929%s", name, 4 - (misses[steamID] or 0))
+    client.ChatPrintf(msg)
+end
+
 local function cycleYaw(data, step)
     data.yawCycleIndex = data.yawCycleIndex + (step or .5)
 
@@ -381,6 +387,7 @@ callbacks.Register("CreateMove", function(cmd)
                 if misses[steamID] < config.maxMisses then
                     misses[steamID] = misses[steamID] + 1
 					awaitingConfirmation[steamID] = nil
+					announceMiss(enemy)
 					goto continue
                 end
             end
