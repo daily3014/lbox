@@ -14,6 +14,7 @@ local config = {
     }
 }
 
+local lastHits = {}
 local usesAntiAim = {}
 local lastConsecutiveShots = {}
 local customAngleData = {}
@@ -34,6 +35,12 @@ end
 local function getSteamID(player)
     local playerInfo = client.GetPlayerInfo(player:GetIndex())
     return playerInfo.SteamID
+end
+
+local function getMinimumLatency(trueLatency)
+	local latency = clientstate.GetLatencyIn() + clientstate.GetLatencyOut()
+	if trueLatency == true then return latency end
+	return latency <= 0.1 and 0.1 or latency
 end
 
 local function setupPlayerAngleData(player)
@@ -314,11 +321,11 @@ callbacks.Register("CreateMove", function(cmd)
             if victimInfo then
                 local victim = victimInfo.entity
 
-                if awaitingConfirmation[getSteamID(victim)].wasHit then
+                if awaitingConfirmation[getSteamID(victim)] and awaitingConfirmation[getSteamID(victim)].wasHit then
                     goto skip
                 end
 
-                awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + clientstate.GetLatencyIn() + clientstate.GetLatencyOut(), wasHit = false}
+                awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + getMinimumLatency(), wasHit = false}
             end
         end
     end
@@ -350,8 +357,18 @@ callbacks.Register("CreateMove", function(cmd)
         local enemy, hitTime, wasHit = data.enemy, data.hitTime, data.wasHit
 
         if wasHit then
+			awaitingConfirmation[steamID] = nil
             goto continue
         end
+
+		if lastHits[steamID] and lastHits[steamID].wasHit then
+			local diff = globals.CurTime() - lastHits[steamID].time
+			if diff < getMinimumLatency(true) * 2 then
+				-- we hit the person but the event was fired before awaitingconfirmation was updated
+				awaitingConfirmation[steamID] = nil
+            	goto continue
+			end
+		end
 
         if globals.CurTime() >= hitTime then
             local usingAntiAim = usesAntiAim[steamID]
@@ -363,7 +380,8 @@ callbacks.Register("CreateMove", function(cmd)
 
                 if misses[steamID] < config.maxMisses then
                     misses[steamID] = misses[steamID] + 1
-                    goto continue
+					awaitingConfirmation[steamID] = nil
+					goto continue
                 end
             end
 
@@ -372,9 +390,7 @@ callbacks.Register("CreateMove", function(cmd)
             end
 
             cycleYaw(customAngleData[steamID])
-
-            goto continue
-            awaitingConfirmation[steamID] = nil
+			awaitingConfirmation[steamID] = nil
         end
 
         ::continue::
@@ -406,6 +422,9 @@ callbacks.Register("FireGameEvent", function(event)
 
         if awaitingConfirmation[steamID] then
             awaitingConfirmation[steamID].wasHit = headshot
+		else
+			-- could have fired before createmove
+			lastHits[steamID] = {wasHit = headshot, time = globals.CurTime()}
         end
     end
 end)
