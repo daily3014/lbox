@@ -11,3 +11,4 @@
 ## lnx aimbot.lua - fork of lnx's POC aimbot with added fakelag fix
 * very unstable, could crash
 * super unfinished
+* i dont even know if it even uses the fakelag fix....
