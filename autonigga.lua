@@ -10,11 +10,21 @@ local function getSteamID(player)
 	return playerInfo.SteamID
 end
 
+local function tableFind(tbl, value)
+	for idx, val in pairs(tbl) do
+		if val == value then
+			return idx
+		end
+	end
+
+	return nil
+end
+
 local function isFriends(player)
 	local playerSteamID = getSteamID(player)
 	local partyMembers = party.GetMembers()
 
-	return playerlist.GetPriority(player) == -1 or table.find(partyMembers, playerSteamID) ~= nil or steam.IsFriend(playerSteamID)
+	return playerlist.GetPriority(player) == -1 or tableFind(partyMembers, playerSteamID) ~= nil or steam.IsFriend(playerSteamID)
 end
 
 local function isOppositeTeam(player)
