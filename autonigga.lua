@@ -1,7 +1,7 @@
-local INTERVAL_SECONDS = 1
+local INTERVAL_SECONDS = 15
 local IGNORE_FRIENDS = true
 local IGNORE_TEAM = true
-local MESSAGE = "%s, you're a nigga" -- %s is placeholder for the player name
+local MESSAGE = "%s is a nigger" -- %s is placeholder for the player name
 
 local niggaCooldown = { }
 
