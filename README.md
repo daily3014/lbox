@@ -8,7 +8,11 @@
 * edit keybind in the lua
 ## slender.lua - boss esp & page esp for community gamemode slender fortress
 * pages only appear when you get close to them
-## lnx aimbot.lua - fork of lnx's POC aimbot with added fakelag fix
+## lnx aimbot.lua - fork of lnx's POC aimbot with added fakelag fix (USELESS NOW!!!!!!!!!)
 * very unstable, could crash
 * super unfinished
 * i dont even know if it even uses the fakelag fix....
+## auto heal arrow.lua - custom auto vaccinator and auto heal arrow
+* projectile and cheating sniper/scout/heavy checks
+* crossbow will require manual aim unless you use lmaobox proj aimbot (can be enabled automatically with `config.controlAimbot`)
+* and much more
