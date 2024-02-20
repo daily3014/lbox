@@ -23,6 +23,9 @@ local awaitingConfirmation = {}
 local misses = {}
 local headshotWeapons = {[17] = true, [43] = true}
 local cycleKeyState = false
+local shootTick
+local lastPlayerAngles
+local playerShotAngles
 
 local M_RADPI = 180 / math.pi
 
@@ -39,9 +42,17 @@ local function getSteamID(player)
 end
 
 local function getMinimumLatency(trueLatency)
-	local latency = clientstate.GetLatencyIn() + clientstate.GetLatencyOut()
-	if trueLatency == true then return latency end
-	return latency <= 0.1 and 0.1 or latency
+	local netChannel = clientstate.GetNetChannel()
+	if netChannel then
+		local latency =  netChannel:GetLatency(0) + netChannel:GetLatency(1)
+		if trueLatency == true then
+			return latency
+		end
+
+		return latency <= 0.1 and 0.1 or latency
+	end
+
+	return 0
 end
 
 local function setupPlayerAngleData(player)
@@ -78,11 +89,15 @@ local function resolvePitch(pitch)
 		return pitch / 271 * 89
 	end
 
+	if pitch > 89.3 or pitch < -89.3 then
+		return -pitch
+	end
+
 	return pitch
 end
 
 local function isUsingAntiAim(pitch)
-	if pitch > 89.4 or pitch < -89.4 then
+	if pitch > 89.4 or pitch < -89.1 then
 		return true
 	end
 
@@ -115,7 +130,7 @@ local function getYaw(currentYaw, data)
 		return lookAt(enemyPosition, localPlayerPosition)
 	end
 
-	return newYaw
+	return  newYaw
 end
 
 local function getYawText(data)
@@ -154,7 +169,7 @@ end
 
 local function tryingToShoot(cmd)
 	if cmd and (cmd.buttons ~ IN_ATTACK) == 0 then
-		return false
+		return true
 	end
 
 	if gui.GetValue("aim position") == "body" then
@@ -212,7 +227,7 @@ end
 local function angleFov(vFrom, vTo)
 	local vSrc = vFrom:Forward()
 	local vDst = vTo:Forward()
-	
+
 	local fov = math.deg(math.acos(vDst:Dot(vSrc) / vDst:LengthSqr()))
 	if isNaN(fov) then fov = 0 end
 
@@ -240,13 +255,14 @@ local function checkForFakePitch(player, steamID)
 	end
 end
 
-local function getBestTarget(customFOV)
+local function getBestTarget(customFOV, viewangles)
 	local localPlayer = entities.GetLocalPlayer()
 	local players = entities.FindByClass("CTFPlayer")
 	local target = nil
 	local lastFov = math.huge
 
 	for _, entity in pairs(players) do
+		if not localPlayer then goto continue end
 		if not entity then goto continue end
 		if not entity:IsAlive() then goto continue end
 		if entity:GetTeamNumber() == localPlayer:GetTeamNumber() then goto continue end
@@ -254,7 +270,8 @@ local function getBestTarget(customFOV)
 		local player = entity
 		local aimPos = getHitboxPos(player, 1)
 		local angles = positionAngles(getEyePos(localPlayer), aimPos)
-		local fov = angleFov(angles, engine.GetViewAngles())
+		local fov = angleFov(angles, viewangles)
+
 		if fov > (customFOV or gui.GetValue("aim fov")) then goto continue end
 
 		if fov < lastFov then
@@ -294,8 +311,23 @@ local function playerShot(cmd, player)
 	else
 		lastConsecutiveShots[id] = 0
 	end
-	
+
 	return false
+end
+
+local function handlePlayerAimbotShooting()
+	local victimInfo = getBestTarget(nil, playerShotAngles or engine.GetViewAngles())
+
+	if victimInfo then
+		local victim = victimInfo.entity
+		if not victim or not victim:IsValid() then return end
+
+		if awaitingConfirmation[getSteamID(victim)] and awaitingConfirmation[getSteamID(victim)].wasHit then
+			return
+		end
+
+		awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + getMinimumLatency() * 2, wasHit = false}
+	end
 end
 
 local function propUpdate()
@@ -303,7 +335,18 @@ local function propUpdate()
 	local players = entities.FindByClass("CTFPlayer")
 
 	for idx, player in pairs(players) do
-		if idx == localPlayer:GetIndex() then goto continue end
+		if not localPlayer then goto continue end
+		if idx == localPlayer:GetIndex() then 
+			if shootTick and globals.TickCount() == shootTick + 1 then
+				shootTick = nil
+				playerShotAngles = lastPlayerAngles
+				handlePlayerAimbotShooting()
+			end
+
+			lastPlayerAngles = localPlayer:GetPropVector("tfnonlocaldata", "m_angEyeAngles[0]")
+			goto continue
+		end
+
 		if player:IsDormant() or not player:IsAlive() then goto continue end
 		
 		if playerlist.GetPriority(player) >= config.minPriority then
@@ -311,16 +354,17 @@ local function propUpdate()
 		end
 
 		local steamID = getSteamID(player)
-		local networkAngle = player:GetPropVector("tfnonlocaldata", "m_angEyeAngles[0]") 
+		local networkAngle = player:GetPropVector("tfnonlocaldata", "m_angEyeAngles[0]")
 		local customAngle = Vector3(networkAngle.x, networkAngle.y, networkAngle.z)
 		
 		if isUsingAntiAim(networkAngle.x) then
 			if not usesAntiAim[steamID] then
 				usesAntiAim[steamID] = true
-			end 
+			end
 
 			setupPlayerAngleData(player)
 		end
+
 
 		if customAngleData[steamID] then
 			customAngle.y = getYaw(networkAngle.y, customAngleData[steamID])
@@ -333,15 +377,16 @@ local function propUpdate()
 	end
 end
 
-local function checkForCycleYawKeybind()
+local function checkForCycleYawKeybind(cmd)
 	local keyDown = isLmaoboxKeybindDown("toggle yaw key")
 
 	if cycleKeyState ~= keyDown and keyDown == true then
-		local victimInfo = getBestTarget(config.cycleYawFOV)
-	
+		local victimInfo = getBestTarget(config.cycleYawFOV, cmd.viewangles)
+
 		if victimInfo then
 			local victim = victimInfo.entity
-		
+			if not victim or not victim:IsValid() then return end
+
 			if not customAngleData[getSteamID(victim)] then
 				setupPlayerAngleData(victim)
 			end
@@ -357,7 +402,7 @@ end
 local function processConfirmation(steamID, data)
 	local enemy, hitTime, wasHit = data.enemy, data.hitTime, data.wasHit
 
-	if wasHit then
+	if wasHit and data.headshot then
 		awaitingConfirmation[steamID] = nil
 		goto continue
 	end
@@ -371,6 +416,8 @@ local function processConfirmation(steamID, data)
 	end
 
 	if globals.CurTime() >= hitTime then
+		awaitingConfirmation[steamID] = nil
+
 		local usingAntiAim = usesAntiAim[steamID]
 
 		if not usingAntiAim then
@@ -380,10 +427,11 @@ local function processConfirmation(steamID, data)
 
 			if misses[steamID] < config.maxMisses then
 				misses[steamID] = misses[steamID] + 1
-				awaitingConfirmation[steamID] = nil
 				announceMiss(enemy)
 				goto continue
 			end
+		else
+			client.ChatPrintf(string.format("\x073475c9[Resolver] \x01Acknowledged miss"))
 		end
 
 		if not customAngleData[steamID] then
@@ -391,31 +439,17 @@ local function processConfirmation(steamID, data)
 		end
 
 		cycleYaw(customAngleData[steamID])
-		awaitingConfirmation[steamID] = nil
 	end
 
 	::continue::
 end
 
 local function handlePlayerShooting(cmd)
-	if not cmd then return end
 	local playerDidShoot = playerShot(cmd)
 
-	if playerDidShoot then
-		local victimInfo = getBestTarget()
-	
-		if victimInfo then
-			local victim = victimInfo.entity
-
-			if awaitingConfirmation[getSteamID(victim)] and awaitingConfirmation[getSteamID(victim)].wasHit then
-				goto skip
-			end
-
-			awaitingConfirmation[getSteamID(victim)] = {enemy = victim, hitTime = globals.CurTime() + getMinimumLatency(), wasHit = false}
-		end
+	if playerDidShoot  then
+		shootTick = globals.TickCount()
 	end
-
-	::skip::
 end
 
 local function fireGameEvent(event)
@@ -425,6 +459,10 @@ local function fireGameEvent(event)
 		local attacker = entities.GetByUserID(event:GetInt("attacker"))
 		local headshot = getBool(event, "crit")
 
+		if not localPlayer then
+			return
+		end
+
 		if (attacker ~= nil and localPlayer:GetIndex() ~= attacker:GetIndex()) then
 			local attackerSteamID = getSteamID(attacker)
 			checkForFakePitch(attacker, attackerSteamID)
@@ -433,7 +471,8 @@ local function fireGameEvent(event)
 		local steamID = getSteamID(victim)
 
 		if awaitingConfirmation[steamID] then
-			awaitingConfirmation[steamID].wasHit = headshot
+			awaitingConfirmation[steamID].headshot = headshot
+			awaitingConfirmation[steamID].wasHit = true
 		else
 			lastHits[steamID] = {wasHit = headshot, time = globals.CurTime()} -- could have fired before createmove
 		end
@@ -445,7 +484,7 @@ local function createMove(cmd)
 		handlePlayerShooting(cmd)
 	end
 
-	checkForCycleYawKeybind()
+	checkForCycleYawKeybind(cmd)
 
 	for steamID, data in pairs(awaitingConfirmation) do
 		processConfirmation(steamID, data)
