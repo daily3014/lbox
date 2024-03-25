@@ -16,3 +16,9 @@
 * projectile and cheating sniper/scout/heavy checks
 * crossbow will require manual aim unless you use lmaobox proj aimbot (can be enabled automatically with `config.controlAimbot`)
 * and much more
+## anti party networking.lua - block rijin networking party messages
+## auto medic.lua - medic spam
+* looks for a medic in a 1500 unit range and if theyre not dormant it will use medic voiceline if ur below max hp
+## fresnel esp.lua - swag esp
+* fresnel esp for lmaobox
+* supports custom color for cheaters, friends & localplayer, teammate and enemies
